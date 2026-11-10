@@ -1,0 +1,41 @@
+# Environment Configuration
+.env
+.env.backup
+.env.local
+
+# Installation Lock
+installed.lock
+
+# Storage, Backups & Logs
+/storage/backups/*.sql
+/storage/logs/*.log
+/storage/temp/*
+*.log
+
+# User Uploads (kecuali logo default jika diperlukan)
+/public/uploads/temp/*
+/public/uploads/materi/*
+/public/uploads/tugas/*
+/public/uploads/siswa/*
+/public/uploads/guru/*
+/public/uploads/soal/*
+
+# Vendor & Dependencies (if composer used)
+/vendor/
+composer.phar
+
+# OS & Editor generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# Test & Temporary Scripts
+/tests/temp/
+cookie.txt
+

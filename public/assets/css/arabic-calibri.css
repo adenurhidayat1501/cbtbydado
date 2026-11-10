@@ -1,0 +1,43 @@
+/**
+ * GarudaCBT Arabic Font Configuration
+ * Primary Font: Arabic Calibri with fallbacks to Amiri, Scheherazade New, and Traditional Arabic
+ */
+
+@font-face {
+    font-family: 'Arabic Calibri';
+    src: local('Calibri'), local('Amiri'), local('Traditional Arabic'), local('Arial');
+    font-weight: normal;
+    font-style: normal;
+}
+
+.arabic-text, 
+.text-arabic,
+[dir="rtl"],
+.font-arabic {
+    font-family: 'Arabic Calibri', 'Amiri', 'Traditional Arabic', 'Scheherazade New', 'Tahoma', sans-serif !important;
+    direction: rtl;
+    text-align: right;
+    font-size: 1.45rem;
+    line-height: 2.2;
+    letter-spacing: 0.5px;
+}
+
+.arabic-inline {
+    font-family: 'Arabic Calibri', 'Amiri', 'Traditional Arabic', 'Scheherazade New', 'Tahoma', sans-serif !important;
+    direction: rtl;
+    display: inline-block;
+    font-size: 1.35rem;
+    line-height: 1.8;
+}
+
+/* Question paper arabic layout */
+.soal-arabic-block {
+    direction: rtl;
+    text-align: right;
+    background-color: #fcfcfc;
+    border-right: 4px solid #198754;
+    padding: 12px 18px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+}
+
