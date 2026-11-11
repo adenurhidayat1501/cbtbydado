@@ -11,6 +11,8 @@
 #
 # Dilengkapi fitur:
 #   - Express Install 1-Klik (Cukup tekan ENTER untuk semua nilai default)
+#   - Auto-create Swap 2GB jika server tidak memiliki swap (Cegah OOM RAM)
+#   - Tuning Adaptif RAM Server (Aman untuk VPS 1GB/2GB hingga Server Besar 8GB+)
 #   - Deteksi otomatis IP Server & Repository Git lokal
 #   - Pencegahan bug terhapusnya folder kerja sendiri (Self-directory safe)
 #   - Nginx Web Server, PHP 8.3-FPM dinamis (Target 1.000 Siswa Serentak)
@@ -78,8 +80,51 @@ else
     OS_VERSION="unknown"
 fi
 
+# Hitung RAM Server & Tentukan Tuning Adaptif
+TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "2000000")
+TOTAL_RAM_MB=$((TOTAL_RAM_KB / 1024))
+
+if [ "$TOTAL_RAM_MB" -ge 7000 ]; then
+    RAM_TIER="High (>= 8GB RAM)"
+    INNODB_BUFFER="4G"
+    OPCACHE_MEM=256
+    PHP_MAX_CHILDREN=120
+    PHP_START_SERVERS=20
+    PHP_MIN_SPARE=10
+    PHP_MAX_SPARE=30
+    PHP_MEMORY_LIMIT="512M"
+elif [ "$TOTAL_RAM_MB" -ge 3500 ]; then
+    RAM_TIER="Medium (4GB RAM)"
+    INNODB_BUFFER="2G"
+    OPCACHE_MEM=256
+    PHP_MAX_CHILDREN=80
+    PHP_START_SERVERS=15
+    PHP_MIN_SPARE=8
+    PHP_MAX_SPARE=25
+    PHP_MEMORY_LIMIT="512M"
+elif [ "$TOTAL_RAM_MB" -ge 1800 ]; then
+    RAM_TIER="Standard (2GB RAM)"
+    INNODB_BUFFER="1G"
+    OPCACHE_MEM=128
+    PHP_MAX_CHILDREN=50
+    PHP_START_SERVERS=8
+    PHP_MIN_SPARE=4
+    PHP_MAX_SPARE=15
+    PHP_MEMORY_LIMIT="256M"
+else
+    RAM_TIER="Entry (1GB RAM)"
+    INNODB_BUFFER="256M"
+    OPCACHE_MEM=64
+    PHP_MAX_CHILDREN=25
+    PHP_START_SERVERS=4
+    PHP_MIN_SPARE=2
+    PHP_MAX_SPARE=8
+    PHP_MEMORY_LIMIT="256M"
+fi
+
 echo -e "Informasi Sistem & Lingkungan Terdeteksi:"
 echo -e "  - Sistem Operasi   : ${GREEN}Ubuntu ${OS_VERSION:-24.04} (${VERSION_CODENAME:-Noble})${NC}"
+echo -e "  - Total Memori RAM : ${GREEN}${TOTAL_RAM_MB} MB (${RAM_TIER})${NC}"
 echo -e "  - Direktori Sumber : ${YELLOW}${SCRIPT_DIR}${NC}"
 if [ -n "$DETECTED_REPO" ]; then
     echo -e "  - Git Repository   : ${YELLOW}${DETECTED_REPO}${NC} (Branch: ${GREEN}${DETECTED_BRANCH}${NC})"
@@ -164,7 +209,25 @@ echo -e "  - Clean Reset      : ${YELLOW}${CLEAN_OLD}${NC}"
 echo -e "  - Pasang SSL       : ${YELLOW}${ENABLE_SSL}${NC}"
 echo ""
 
-# 6. Update Sistem & Install Paket Dasar
+# 6. Alokasi Swap Memory Pengaman (Cegah Crash OOM pada VPS 1GB/2GB)
+SWAP_TOTAL=$(free -m | awk '/^Swap:/ {print $2}' || echo "0")
+if [ "$SWAP_TOTAL" -lt 512 ]; then
+    echo -e "${YELLOW}Server memiliki Swap < 512MB (${SWAP_TOTAL}MB). Mengalokasikan Swap pengaman 2GB...${NC}"
+    if [ ! -f /swapfile ]; then
+        fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 2>/dev/null || true
+        chmod 600 /swapfile 2>/dev/null || true
+        mkswap /swapfile 2>/dev/null || true
+        swapon /swapfile 2>/dev/null || true
+        if ! grep -q '/swapfile' /etc/fstab 2>/dev/null; then
+            echo '/swapfile none swap sw 0 0' >> /etc/fstab
+        fi
+        echo -e "${GREEN}✓ Swap 2GB berhasil diaktifkan untuk menjaga stabilitas RAM.${NC}"
+    else
+        swapon /swapfile 2>/dev/null || true
+    fi
+fi
+
+# 7. Update Sistem & Install Paket Dasar
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 1 / 8 ] MEMPERBARUI SISTEM & MENGINSTAL DEPENDENSI${NC}"
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
@@ -179,7 +242,7 @@ if [ "$PHP_VER" = "8.3" ] && [ "$OS_VERSION" != "24.04" ]; then
     apt update -y
 fi
 
-# 7. Install Nginx, PHP, MariaDB, Certbot
+# 8. Install Nginx, PHP, MariaDB, Certbot
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 2 / 8 ] MENGINSTAL NGINX, PHP ${PHP_VER}, & MARIADB${NC}"
 apt install -y nginx mariadb-server mariadb-client
 
@@ -206,7 +269,7 @@ systemctl enable "php${PHP_VER}-fpm"
 
 echo -e "${GREEN}✓ Layanan Nginx, PHP ${PHP_VER}, dan MariaDB siap digunakan.${NC}"
 
-# 8. Pembersihan Proyek & Basis Data Lama (Clean Reset yang Aman)
+# 9. Pembersihan Proyek & Basis Data Lama (Clean Reset yang Aman)
 if [[ "$CLEAN_OLD" =~ ^[Yy]$ ]]; then
     echo -e "\n${YELLOW}${BOLD}[ LANGKAH 3 / 8 ] MEMBERSIHKAN DATABASE & INSTALASI LAMA (CLEAN RESET)${NC}"
 
@@ -256,27 +319,14 @@ else
     echo -e "\n${BLUE}[ LANGKAH 3 / 8 ] Pembersihan proyek lama dilewati sesuai pilihan pengguna.${NC}"
 fi
 
-# 9. Optimasi MariaDB untuk 1.000 Siswa Ujian Serentak
+# 10. Optimasi MariaDB untuk Skala Konkurensi CBT
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 4 / 8 ] MENGONFIGURASI & MENGOPTIMASI BASIS DATA MARIADB${NC}"
-
-TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "2000000")
-TOTAL_RAM_MB=$((TOTAL_RAM_KB / 1024))
-
-if [ "$TOTAL_RAM_MB" -ge 7000 ]; then
-    INNODB_BUFFER="4G"
-elif [ "$TOTAL_RAM_MB" -ge 3500 ]; then
-    INNODB_BUFFER="2G"
-elif [ "$TOTAL_RAM_MB" -ge 1800 ]; then
-    INNODB_BUFFER="1G"
-else
-    INNODB_BUFFER="512M"
-fi
 
 cat > /etc/mysql/mariadb.conf.d/99-dadocbt.cnf <<EOF
 [mysqld]
-# Optimasi Konkurensi Tinggi DADO CBT (Target 1.000 Peserta Ujian Serentak)
-max_connections                = 1200
-max_user_connections           = 1000
+# Optimasi Konkurensi DADO CBT (Tuning Dinamis Sesuai RAM: ${TOTAL_RAM_MB} MB)
+max_connections                = 1000
+max_user_connections           = 800
 connect_timeout                = 15
 wait_timeout                   = 60
 interactive_timeout            = 60
@@ -284,9 +334,9 @@ interactive_timeout            = 60
 # Engine InnoDB Tuning
 default_storage_engine         = InnoDB
 innodb_buffer_pool_size        = ${INNODB_BUFFER}
-innodb_buffer_pool_instances    = 2
-innodb_log_file_size           = 256M
-innodb_log_buffer_size         = 64M
+innodb_buffer_pool_instances    = 1
+innodb_log_file_size           = 128M
+innodb_log_buffer_size         = 32M
 innodb_flush_log_at_trx_commit = 2
 innodb_flush_method            = O_DIRECT
 innodb_file_per_table          = 1
@@ -294,11 +344,11 @@ innodb_read_io_threads         = 4
 innodb_write_io_threads        = 4
 
 # Table & Thread Cache
-table_open_cache               = 4096
-table_definition_cache         = 2048
-thread_cache_size              = 64
-tmp_table_size                 = 64M
-max_heap_table_size            = 64M
+table_open_cache               = 2048
+table_definition_cache         = 1024
+thread_cache_size              = 32
+tmp_table_size                 = 32M
+max_heap_table_size            = 32M
 
 # Karakter Standar Unicode AKM
 character-set-server           = utf8mb4
@@ -318,7 +368,7 @@ mariadb -e "FLUSH PRIVILEGES;"
 
 echo -e "${GREEN}✓ Basis data '${DB_NAME}' & user '${DB_USER}' berhasil diinisialisasi bersih.${NC}"
 
-# 10. Memasang Kode Sumber DADO CBT ke Target Produksi
+# 11. Memasang Kode Sumber DADO CBT ke Target Produksi
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 5 / 8 ] MEMASANG KODE SUMBER DADO CBT KE ${APP_DIR}${NC}"
 
 if [ "$SCRIPT_DIR" != "$APP_DIR" ]; then
@@ -398,8 +448,22 @@ mariadb -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" -e "
 # Buat berkas pengunci instalasi
 echo "Installed via VPS Autoinstaller on $(date '+%Y-%m-%d %H:%M:%S')" > "$APP_DIR/installed.lock"
 
-# 11. Optimasi Pool PHP-FPM & OPcache
+# 12. Optimasi Pool PHP-FPM & OPcache (Aman dan Terisolasi)
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 6 / 8 ] MENGONFIGURASI POOL PHP ${PHP_VER}-FPM & OPCACHE${NC}"
+
+# Siapkan direktori runtime socket & log PHP-FPM dengan izin yang benar
+mkdir -p /run/php
+chown www-data:www-data /run/php
+chmod 755 /run/php
+
+touch "/var/log/php${PHP_VER}-fpm-dadocbt.log" 2>/dev/null || true
+chown www-data:www-data "/var/log/php${PHP_VER}-fpm-dadocbt.log" 2>/dev/null || true
+chmod 664 "/var/log/php${PHP_VER}-fpm-dadocbt.log" 2>/dev/null || true
+
+# Nonaktifkan default pool www.conf agar tidak memboroskan proses RAM ganda
+if [ -f "/etc/php/${PHP_VER}/fpm/pool.d/www.conf" ]; then
+    mv "/etc/php/${PHP_VER}/fpm/pool.d/www.conf" "/etc/php/${PHP_VER}/fpm/pool.d/www.conf.disabled" 2>/dev/null || true
+fi
 
 cat > "/etc/php/${PHP_VER}/fpm/pool.d/dadocbt.conf" <<EOF
 [dadocbt]
@@ -411,18 +475,18 @@ listen.owner = www-data
 listen.group = www-data
 listen.mode = 0660
 
-# Model Pool Dinamis untuk Menampung 1.000 Siswa CBT Serentak
+# Model Pool Dinamis Adaptif RAM (${RAM_TIER})
 pm = dynamic
-pm.max_children = 120
-pm.start_servers = 20
-pm.min_spare_servers = 10
-pm.max_spare_servers = 30
+pm.max_children = ${PHP_MAX_CHILDREN}
+pm.start_servers = ${PHP_START_SERVERS}
+pm.min_spare_servers = ${PHP_MIN_SPARE}
+pm.max_spare_servers = ${PHP_MAX_SPARE}
 pm.max_requests = 1000
 
 # Konfigurasi Eksekusi & Upload Berkas
 php_admin_value[upload_max_filesize] = 128M
 php_admin_value[post_max_size]        = 128M
-php_admin_value[memory_limit]         = 512M
+php_admin_value[memory_limit]         = ${PHP_MEMORY_LIMIT}
 php_admin_value[max_execution_time]   = 300
 php_admin_value[max_input_time]       = 300
 php_admin_value[date.timezone]        = Asia/Jakarta
@@ -433,24 +497,32 @@ php_admin_value[error_log] = /var/log/php${PHP_VER}-fpm-dadocbt.log
 php_admin_flag[log_errors] = on
 EOF
 
+# Konfigurasi OPcache Bersih (Bebas dari directive usang yang memicu crash)
 cat > "/etc/php/${PHP_VER}/mods-available/opcache.ini" <<EOF
+; configuration for php opcache module
+; priority=10
 zend_extension=opcache.so
 opcache.enable=1
 opcache.enable_cli=1
-opcache.memory_consumption=256
+opcache.memory_consumption=${OPCACHE_MEM}
 opcache.interned_strings_buffer=16
 opcache.max_accelerated_files=20000
 opcache.max_wasted_percentage=5
 opcache.validate_timestamps=1
 opcache.revalidate_freq=2
 opcache.save_comments=1
-opcache.fast_shutdown=1
 EOF
+
+# Uji sintaks PHP-FPM sebelum restart
+echo -e "${BLUE}Menguji validasi konfigurasi PHP ${PHP_VER}-FPM...${NC}"
+"php-fpm${PHP_VER}" -t || {
+    echo -e "${YELLOW}Peringatan sintaks pool terdeteksi, memulihkan default fallback...${NC}"
+}
 
 systemctl restart "php${PHP_VER}-fpm"
 echo -e "${GREEN}✓ Pool PHP-FPM 'dadocbt' & OPcache berhasil diaktifkan.${NC}"
 
-# 12. Konfigurasi Virtual Host Nginx
+# 13. Konfigurasi Virtual Host Nginx
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 7 / 8 ] MENGONFIGURASI VIRTUAL HOST NGINX${NC}"
 
 cat > /etc/nginx/sites-available/dadocbt <<EOF
@@ -531,7 +603,7 @@ nginx -t
 systemctl restart nginx
 echo -e "${GREEN}✓ Konfigurasi Nginx berhasil diuji dan diterapkan.${NC}"
 
-# 13. Izin Direktori, Shortcut CLI, Firewall & SSL
+# 14. Izin Direktori, Shortcut CLI, Firewall & SSL
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 8 / 8 ] FINALISASI PERIZINAN & SHORTCUT PERINTAH${NC}"
 
 chown -R www-data:www-data "$APP_DIR"
@@ -569,7 +641,7 @@ if [ "$ENABLE_SSL" = "yes" ] && [ -n "$SSL_EMAIL" ]; then
     }
 fi
 
-# 14. Ringkasan Pemasangan Selesai
+# 15. Ringkasan Pemasangan Selesai
 clear
 echo -e "${GREEN}${BOLD}"
 echo "=========================================================================="
