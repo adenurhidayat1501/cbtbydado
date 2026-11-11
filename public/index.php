@@ -260,6 +260,7 @@ $router->post('/cbt/bank-soal/upload-image', [\App\Controllers\Cbt\BankSoalContr
 $router->post('/cbt/bank-soal/import-word/{id}', [\App\Controllers\Cbt\BankSoalController::class, 'importWord'], [$authMiddleware, $guruGuard]);
 $router->post('/cbt/bank-soal/import-excel/{id}', [\App\Controllers\Cbt\BankSoalController::class, 'importExcel'], [$authMiddleware, $guruGuard]);
 $router->get('/cbt/bank-soal/template-excel', [\App\Controllers\Cbt\BankSoalController::class, 'downloadTemplateExcel'], [$authMiddleware, $guruGuard]);
+$router->get('/cbt/bank-soal/template-word', [\App\Controllers\Cbt\BankSoalController::class, 'downloadTemplateWord'], [$authMiddleware, $guruGuard]);
 
 // 3. Jadwal Ujian & Alokasi Waktu
 $router->get('/cbt/jadwal', [\App\Controllers\Cbt\JadwalController::class, 'index'], [$authMiddleware, $guruGuard]);

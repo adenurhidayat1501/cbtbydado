@@ -516,6 +516,12 @@ class BankSoalController extends Controller
 
         try {
             $questions = $this->wordParser->parseDocx($file['tmp_name']);
+            if (empty($questions)) {
+                set_flash('error', 'Tidak ada butir soal yang berhasil dibaca dari dokumen Word. Pastikan format tabel sesuai template.');
+                $this->redirect('/cbt/bank-soal/detail/' . $idBank);
+                return;
+            }
+
             $count = 0;
             foreach ($questions as $q) {
                 $this->soalModel->saveSoal($idBank, [
@@ -542,19 +548,26 @@ class BankSoalController extends Controller
     }
 
     /**
-     * Import questions from Excel / CSV.
+     * Import questions from Excel (.xlsx) / CSV.
      */
     public function importExcel(int $idBank): void
     {
         $file = $_FILES['file_excel'] ?? null;
         if (!$file || $file['error'] !== UPLOAD_ERR_OK) {
-            set_flash('error', 'Pilih file Excel / CSV yang valid.');
+            set_flash('error', 'Pilih file Excel (.xlsx / .csv) yang valid.');
             $this->redirect('/cbt/bank-soal/detail/' . $idBank);
             return;
         }
 
         try {
-            $questions = $this->excelParser->parseCsv($file['tmp_name']);
+            $originalName = $file['name'] ?? null;
+            $questions = $this->excelParser->parse($file['tmp_name'], $originalName);
+            if (empty($questions)) {
+                set_flash('error', 'Tidak ada butir soal yang berhasil dibaca dari file Excel/CSV. Pastikan format tabel sesuai template.');
+                $this->redirect('/cbt/bank-soal/detail/' . $idBank);
+                return;
+            }
+
             $count = 0;
             foreach ($questions as $q) {
                 $this->soalModel->saveSoal($idBank, [
@@ -581,7 +594,15 @@ class BankSoalController extends Controller
     }
 
     /**
-     * Download Excel question template.
+     * Download Word question template (.docx).
+     */
+    public function downloadTemplateWord(): void
+    {
+        $this->wordParser->generateTemplateDocx();
+    }
+
+    /**
+     * Download Excel question template (.csv).
      */
     public function downloadTemplateExcel(): void
     {

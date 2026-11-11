@@ -252,10 +252,13 @@ $totalSoal = count($questions);
                             <i class="fas fa-file-word mr-1"></i>Import Word (.docx)
                         </button>
                         <button type="button" class="btn btn-info font-weight-bold shadow-sm mr-1" data-toggle="modal" data-target="#modalImportExcel">
-                            <i class="fas fa-file-excel mr-1"></i>Import Excel (.csv)
+                            <i class="fas fa-file-excel mr-1"></i>Import Excel (.csv/.xlsx)
                         </button>
-                        <a href="/cbt/bank-soal/template-excel" class="btn btn-outline-secondary font-weight-bold shadow-sm">
-                            <i class="fas fa-download mr-1"></i>Template Excel
+                        <a href="/cbt/bank-soal/template-word" class="btn btn-outline-success font-weight-bold shadow-sm mr-1" title="Unduh Format Word">
+                            <i class="fas fa-download mr-1"></i>Template Word (.docx)
+                        </a>
+                        <a href="/cbt/bank-soal/template-excel" class="btn btn-outline-info font-weight-bold shadow-sm" title="Unduh Format Excel/CSV">
+                            <i class="fas fa-download mr-1"></i>Template Excel (.csv)
                         </a>
                     </div>
                 </div>
@@ -274,7 +277,7 @@ $totalSoal = count($questions);
                     <div class="text-center py-5">
                         <i class="fas fa-file-alt fa-3x text-muted mb-3"></i>
                         <h5 class="text-muted">Belum ada butir soal di dalam Bank Soal ini.</h5>
-                        <p class="text-muted">Klik tombol <strong>Tambah Butir Soal</strong> atau lakukan <strong>Import</strong> untuk mengisi soal ujian.</p>
+                        <p class="text-muted">Klik tombol <strong>Tambah Butir Soal</strong> atau lakukan <strong>Import Word / Excel</strong> untuk mengisi soal ujian.</p>
                         <a href="/cbt/bank-soal/soal/<?= $idBank ?>?jenis=1" class="btn btn-primary mt-2">
                             <i class="fas fa-plus mr-1"></i>Buat Soal Pertama
                         </a>
@@ -311,7 +314,7 @@ $totalSoal = count($questions);
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <!-- Render Question Text with KaTeX and Arabic class if needed -->
+                                            <!-- Render Question Text with KaTeX and Arabic support -->
                                             <div class="question-content mb-2 p-2 bg-light rounded border" style="max-height: 160px; overflow-y: auto;">
                                                 <?= $q['soal'] ?>
                                             </div>
@@ -334,6 +337,11 @@ $totalSoal = count($questions);
                                                         $keyStr = is_array($keys) ? implode(', ', $keys) : (string)$q['jawaban'];
                                                         ?>
                                                         <span class="badge badge-info mr-1">Kunci Multi: [<?= htmlspecialchars($keyStr) ?>]</span>
+                                                        <strong>Opsi A:</strong> <?= strip_tags($q['opsi_a'] ?? '-') ?> | 
+                                                        <strong>Opsi B:</strong> <?= strip_tags($q['opsi_b'] ?? '-') ?> | 
+                                                        <strong>Opsi C:</strong> <?= strip_tags($q['opsi_c'] ?? '-') ?>
+                                                        <?php if (!empty($q['opsi_d'])): ?> | <strong>Opsi D:</strong> <?= strip_tags($q['opsi_d']) ?><?php endif; ?>
+                                                        <?php if (!empty($q['opsi_e'])): ?> | <strong>Opsi E:</strong> <?= strip_tags($q['opsi_e']) ?><?php endif; ?>
                                                     </div>
                                                 <?php elseif ($jenisQ === 3): ?>
                                                     <div class="text-muted">
@@ -392,13 +400,17 @@ $totalSoal = count($questions);
                     </button>
                 </div>
                 <div class="modal-body">
-                    <div class="callout callout-info">
-                        <h6><i class="fas fa-info-circle mr-1"></i>Format Dokumen Word:</h6>
+                    <div class="callout callout-success">
+                        <h6 class="font-weight-bold text-success"><i class="fas fa-info-circle mr-1"></i>Format Resmi Template Word 5 Tipe AKM:</h6>
                         <ul class="mb-1 pl-3 small">
-                            <li>Format file harus <strong>.docx</strong> (Word 2007 ke atas). Gambar di dalam file Word akan otomatis diekstrak dan disimpan.</li>
-                            <li>Tentukan tipe soal dengan tag: <code>[JENIS: 1]</code> (PG), <code>[JENIS: 2]</code> (PGK), <code>[JENIS: 3]</code> (Jodohkan), <code>[JENIS: 4]</code> (Isian), <code>[JENIS: 5]</code> (Esai).</li>
-                            <li>Kunci jawaban ditulis di akhir soal: <code>KUNCI: A</code> atau <code>KUNCI: A, C</code> (untuk PGK).</li>
-                            <li>Rumus matematika LaTeX dapat ditulis dengan format <code>$rumus$</code>.</li>
+                            <li>Format file harus <strong>.docx</strong> (Microsoft Word 2007 ke atas).</li>
+                            <li><strong>Gambar di dalam soal atau jawaban:</strong> Diekstrak secara otomatis dari file Word dan disimpan permanen ke server.</li>
+                            <li><strong>Tipe 1 (PG Tunggal):</strong> Tabel 6 kolom (NO, SOAL, JENIS=1, OPSI, JAWABAN, KUNCI diberi tanda <code>v</code> pada baris opsi yang benar).</li>
+                            <li><strong>Tipe 2 (PG Kompleks):</strong> Tabel 6 kolom (NO, SOAL, JENIS=2, OPSI, JAWABAN, KUNCI diberi tanda <code>v</code> pada beberapa opsi yang benar).</li>
+                            <li><strong>Tipe 3 (Menjodohkan):</strong> Tabel 9 kolom (NO, SOAL, JENIS=3, KODE BARIS, NAMA BARIS, KODE KOLOM, NAMA KOLOM, KODE BARIS, KODE KOLOM kunci sambungan).</li>
+                            <li><strong>Tipe 4 (Isian Singkat):</strong> Tabel 4 kolom (NO, SOAL, JENIS=4, JAWABAN).</li>
+                            <li><strong>Tipe 5 (Uraian / Essai):</strong> Tabel 4 kolom (NO, SOAL, JENIS=5, JAWABAN pedoman penskoran).</li>
+                            <li>Mendukung penuh rumus matematika <strong>LaTeX</strong> (<code>$...$</code>) dan huruf <strong>Arab</strong>.</li>
                         </ul>
                     </div>
                     <div class="form-group mt-3">
@@ -410,6 +422,9 @@ $totalSoal = count($questions);
                     </div>
                 </div>
                 <div class="modal-footer">
+                    <a href="/cbt/bank-soal/template-word" class="btn btn-outline-success mr-auto font-weight-bold">
+                        <i class="fas fa-download mr-1"></i>Unduh Template Word (.docx)
+                    </a>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-success font-weight-bold">
                         <i class="fas fa-cloud-upload-alt mr-1"></i>Mulai Import Word
@@ -427,7 +442,7 @@ $totalSoal = count($questions);
             <div class="modal-content">
                 <div class="modal-header bg-info text-white">
                     <h5 class="modal-title font-weight-bold" id="modalImportExcelLabel">
-                        <i class="fas fa-file-excel mr-2"></i>Import Soal dari Excel / CSV
+                        <i class="fas fa-file-excel mr-2"></i>Import Soal dari Excel (.xlsx) / CSV
                     </h5>
                     <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close">
                         <span aria-hidden="true">&times;</span>
@@ -435,25 +450,29 @@ $totalSoal = count($questions);
                 </div>
                 <div class="modal-body">
                     <div class="callout callout-info">
-                        <h6><i class="fas fa-info-circle mr-1"></i>Petunjuk Import Excel:</h6>
+                        <h6 class="font-weight-bold text-info"><i class="fas fa-info-circle mr-1"></i>Petunjuk Import Excel / CSV:</h6>
                         <ul class="mb-1 pl-3 small">
-                            <li>Pastikan menggunakan format kolom sesuai template resmi.</li>
-                            <li>Kolom yang tersedia: <strong>Nomor, Jenis, Soal, Opsi A, Opsi B, Opsi C, Opsi D, Opsi E, Jawaban Benar</strong>.</li>
-                            <li>Untuk jenis 1 (PG): jawaban berisi <code>A</code>, <code>B</code>, <code>C</code>, <code>D</code>, atau <code>E</code>.</li>
-                            <li>Untuk jenis 2 (PG Kompleks): jawaban dipisah koma, contoh: <code>A,C</code>.</li>
+                            <li>Mendukung file berformat <strong>.xlsx</strong> (Microsoft Excel Modern) dan <strong>.csv</strong> (UTF-8).</li>
+                            <li>Format tabel sama persis dengan tabel Word:
+                                <ul>
+                                    <li><strong>PG Tunggal & Kompleks (Jenis 1 & 2):</strong> 6 kolom (NO, SOAL, JENIS, OPSI, JAWABAN, KUNCI).</li>
+                                    <li><strong>Menjodohkan (Jenis 3):</strong> 9 kolom (NO, SOAL, JENIS, KODE BARIS, NAMA BARIS, KODE KOLOM, NAMA KOLOM, KODE BARIS, KODE KOLOM).</li>
+                                    <li><strong>Isian & Esai (Jenis 4 & 5):</strong> 4 kolom (NO, SOAL, JENIS, JAWABAN).</li>
+                                </ul>
+                            </li>
                         </ul>
                     </div>
                     <div class="form-group mt-3">
-                        <label class="font-weight-bold">Pilih File CSV / Excel: <span class="text-danger">*</span></label>
+                        <label class="font-weight-bold">Pilih File Excel / CSV: <span class="text-danger">*</span></label>
                         <div class="custom-file">
                             <input type="file" name="file_excel" class="custom-file-input" id="file_excel" accept=".csv, .xlsx, .xls" required>
-                            <label class="custom-file-label" for="file_excel">Pilih file CSV / Excel...</label>
+                            <label class="custom-file-label" for="file_excel">Pilih file .xlsx atau .csv...</label>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <a href="/cbt/bank-soal/template-excel" class="btn btn-outline-info mr-auto">
-                        <i class="fas fa-download mr-1"></i>Unduh Format Template
+                    <a href="/cbt/bank-soal/template-excel" class="btn btn-outline-info mr-auto font-weight-bold">
+                        <i class="fas fa-download mr-1"></i>Unduh Template Excel (.csv)
                     </a>
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-info font-weight-bold">
