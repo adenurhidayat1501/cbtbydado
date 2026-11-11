@@ -1,30 +1,35 @@
-# PANDUAN DEPLOYMENT & AUTO-UPDATE DADO CBT v1.5.3 (UBUNTU 24.04 LTS)
+# PANDUAN DEPLOYMENT & AUTO-UPDATE DADO CBT v1.5.3 (UBUNTU 24.04 / 22.04 LTS)
 
-Dokumen ini menjelaskan tata cara instalasi otomatis pada VPS Ubuntu 24.04 LTS (Noble Numbat) serta konfigurasi **Auto-Update GitHub** (via Webhook, GitHub Actions, dan CLI).
+Dokumen ini menjelaskan tata cara instalasi otomatis pada VPS Ubuntu 24.04 LTS (Noble Numbat) atau 22.04 LTS serta konfigurasi **Auto-Update GitHub** (via Webhook, GitHub Actions, dan CLI).
 
 ---
 
-## 🚀 BAGIAN 1: AUTO INSTALLER VPS UBUNTU 24.04 LTS
+## 🚀 BAGIAN 1: AUTO INSTALLER VPS UBUNTU 24.04 / 22.04 LTS
 
 Installer otomatis telah dikonfigurasi khusus untuk menangani beban **1.000 peserta ujian serentak** dengan mengoptimalkan:
 - **Nginx 1.24+**: FastCGI buffering, static asset caching (KaTeX & Arabic Calibri), Gzip compression.
 - **PHP 8.3-FPM**: Pool dinamis (`pm.max_children = 120`, `max_requests = 1000`, `memory_limit = 512M`).
 - **MariaDB 10.11+**: `max_connections = 1200`, `innodb_flush_log_at_trx_commit = 2`, buffer pool dinamis sesuai RAM server.
-- **Mode Uji Coba (Clean Reset)**: Otomatis menghapus seluruh direktori web lama dan basis data pengujian sebelumnya agar server berada dalam kondisi 100% bersih (*fresh slate*).
+- **Mode Uji Coba (Clean Reset Aman)**: Otomatis membersihkan database pengujian lama tanpa merusak repositori kerja yang sedang aktif.
 - **Firewall UFW**: Port 22 (SSH), 80 (HTTP), dan 443 (HTTPS).
 - **SSL Gratis**: Integrasi Let's Encrypt Certbot otomatis.
 
-### Cara 1: Eksekusi 1-Baris Langsung di VPS Baru
-Login ke VPS via SSH (`ssh root@ip-vps-anda`), kemudian jalankan perintah berikut:
+### Cara Pemasangan Termudah (2 Langkah Cepat di VPS):
+Login ke VPS via SSH (`ssh root@ip-vps-anda`), kemudian jalankan:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<username-anda>/<repo-anda>/main/autoinstall.sh | sudo bash
-```
+# Langkah 1: Clone repository dari GitHub dan masuk ke foldernya
+git clone https://github.com/<username-anda>/<repo-anda>.git dadocbt
+cd dadocbt
 
-### Cara 2: Jalankan Langsung dari Direktori Proyek
-```bash
+# Langkah 2: Jalankan installer otomatis (cukup tekan ENTER saat memilih mode)
 sudo bash autoinstall.sh
+# atau: sudo ./autoinstall.sh
 ```
+
+> [!TIP]
+> **Express Auto-Install:**
+> Saat dijalankan, skrip secara cerdas mendeteksi IP Server dan repository lokal Anda. Cukup tekan **[ENTER]** (memilih opsi 1), installer akan otomatis mengonfigurasi seluruh stack produksi, membuat database, mengimpor 42 tabel relational, dan menyiapkan akun admin default (`admin` / `admin123`).
 
 ---
 
@@ -119,4 +124,3 @@ Tambahkan baris berikut:
 - **Arsip Backup Database**: `/var/www/dadocbt/storage/backups/`
 - **Log Pembaruan**: `/var/www/dadocbt/storage/logs/update.log`
 - **Log Webhook GitHub**: `/var/www/dadocbt/storage/logs/webhook.log`
-

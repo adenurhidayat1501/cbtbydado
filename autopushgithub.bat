@@ -89,10 +89,17 @@ if "!COMMIT_INPUT!"=="" (
     set FINAL_MSG=!COMMIT_INPUT!
 )
 
-REM 6. Stage & Commit
+REM 6. Stage & Set Executable Bit untuk Skrip Linux
 echo.
 echo [*] Menambahkan seluruh file ke staging area...
 git add -A
+
+REM Pastikan skrip bash Linux memiliki bit eksekusi (+x) di index Git
+git update-index --chmod=+x autoinstall.sh 2>nul
+git update-index --chmod=+x deploy/install-vps.sh 2>nul
+git update-index --chmod=+x deploy/update.sh 2>nul
+git update-index --chmod=+x deploy/backup.sh 2>nul
+git update-index --chmod=+x deploy/status.sh 2>nul
 
 echo [*] Melakukan commit berkas...
 git commit -m "!FINAL_MSG!"
@@ -162,9 +169,14 @@ if not "!CURRENT_REMOTE!"=="" echo  Repository : !CURRENT_REMOTE!
 echo  Branch     : main
 if not "!LAST_C!"=="" echo  Commit     : !LAST_C!
 echo.
+echo Tips Pemasangan Baru di VPS Ubuntu:
+echo  1. Login SSH ke VPS: ssh root@ip-vps
+echo  2. Clone repo : git clone !CURRENT_REMOTE! dadocbt
+echo  3. Masuk & run: cd dadocbt ^&^& sudo bash autoinstall.sh
+echo.
 echo Tips Otomasi VPS:
 echo  1. Jika VPS telah dipasang Webhook, server VPS Anda akan otomatis
-echo     ter-update dalam beberapa detik!
+echo     ter-update dalam beberapa detik setiap kali push!
 echo  2. Atau jalankan 'sudo dadocbt-update' di terminal SSH VPS Anda.
 echo ==========================================================================
 echo.

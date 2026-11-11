@@ -77,26 +77,30 @@ DADO CBT mengadopsi identitas resmi **SMP Negeri Satu Atap 2 Cipatujah** dengan 
 
 ---
 
-## 🚀 Panduan Instalasi di VPS Ubuntu 24.04 LTS
+## 🚀 Panduan Instalasi di VPS Ubuntu 24.04 / 22.04 LTS
 
-Telah disediakan skrip **Autoinstaller Otomatis** khusus untuk VPS Ubuntu 24.04 LTS (Noble Numbat) atau 22.04 LTS yang mengonfigurasi seluruh stack produksi siap pakai dalam 1 perintah.
+Telah disediakan skrip **Autoinstaller Otomatis** yang sangat mudah dijalankan dalam 2 langkah cepat:
 
-### Cara 1: Eksekusi 1-Baris Langsung di VPS Baru
-Login ke terminal VPS via SSH (`ssh root@ip-vps`), lalu jalankan:
+### Langkah Pemasangan Termudah (Rekomendasi):
+Login ke VPS via SSH (`ssh root@ip-vps`), lalu jalankan:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/<username-anda>/<repo-anda>/main/autoinstall.sh | sudo bash
-```
+# 1. Clone repository ke VPS dan masuk ke foldernya
+git clone https://github.com/<username-anda>/<repo-anda>.git dadocbt
+cd dadocbt
 
-### Cara 2: Jalankan dari Repositori Lokal di VPS
-```bash
-cd /var/www/dadocbt
+# 2. Jalankan skrip autoinstall (cukup tekan ENTER saat muncul pilihan mode)
 sudo bash autoinstall.sh
+# atau: sudo ./autoinstall.sh
 ```
+
+> [!TIP]
+> **Express 1-Click Install:**
+> Saat skrip berjalan, sistem otomatis mendeteksi IP VPS Anda dan menampilkan pilihan `[1] Express Install`. Cukup tekan **[ENTER]**, skrip akan otomatis memasang dan mengonfigurasi Nginx, PHP 8.3-FPM, MariaDB, firewall UFW, impor 42 tabel relational, serta menyiapkan akun admin default (`admin` / `admin123`) tanpa perlu mengetik parameter rumit!
 
 > [!NOTE]
 > **Fitur Clean Reset (Masa Test):**
-> Installer dilengkapi opsi otomatis untuk menghapus seluruh proyek lama di `/var/www/` dan database lama di MariaDB sebelum memasang versi baru, sehingga server selalu dalam kondisi bersih (*fresh clean install*).
+> Installer dilengkapi opsi pembersihan otomatis untuk menghapus database pengujian dan folder lama sebelum memasang versi baru, sehingga server selalu dalam kondisi bersih (*fresh clean install*).
 
 ---
 
@@ -213,7 +217,7 @@ dado-cbt/
 │   ├── schema.sql          # Skema DDL 42 tabel relasional & composite indexes
 │   └── seed.sql            # Data awal (seeder) pengguna dan konfigurasi
 ├── deploy/
-│   ├── install-vps.sh      # Skrip instalasi otomatis VPS Ubuntu 24.04
+│   ├── install-vps.sh      # Skrip instalasi otomatis VPS Ubuntu 24.04/22.04
 │   ├── update.sh           # Skrip auto-update penarik kode GitHub
 │   ├── backup.sh           # Utilitas backup database gzip terotasi
 │   ├── status.sh           # Utilitas pemantau status kesehatan server
@@ -229,7 +233,7 @@ dado-cbt/
 ├── tests/
 │   ├── test_milestone5.php # Test suite engine ujian CBT & Anti-Cheat (43 tests)
 │   └── test_milestone6.php # Test suite E-Rapor, DKN, & Buku Induk (49 tests)
-├── autoinstall.sh          # Auto Installer 1-baris di root untuk VPS
+├── autoinstall.sh          # Auto Installer VPS (Cukup: git clone lalu sudo bash autoinstall.sh)
 ├── autopushgithub.bat      # Auto Push 1-klik untuk Windows
 ├── .gitignore              # Proteksi berkas sensitif (.env, backups, logs)
 └── README.md               # Dokumentasi utama proyek
@@ -258,4 +262,3 @@ php tests/test_milestone6.php
 
 Dikembangkan khusus untuk **SMP Negeri Satu Atap 2 Cipatujah**, Kab. Tasikmalaya, Jawa Barat.  
 Hak Cipta dilindungi undang-undang.
-

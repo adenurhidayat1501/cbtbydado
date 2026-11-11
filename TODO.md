@@ -51,15 +51,14 @@
 
 ## Milestone 6: Modul E-Rapor, DKN, Buku Induk, & Utilitas DB
 - [x] **6.1 Setting Rapor & KKM:** Konfigurasi KKM tunggal/multi, bobot PH/PTS/PAS, rentang predikat, KIKD, serta tanggal dan tanda tangan rapor.
-- [x] **6.2 Kumpulan Nilai Rapor:** Sinkronisasi nilai dari E-Learning & CBT, import Excel, input Nilai Pengetahuan (KI-3), Keterampilan (KI-4), Sikap Spiritual & Sosial, Ekstrakurikuler, Absensi, Catatan Wali, Kesehatan/Fisik, Prestasi, dan Kenaikan Kelas.
+- [x] **6.2 Kumpulan Nilai Rapor:** Sinkronisasi nilai dari E-Learning & CBT, input Excel, input Nilai Pengetahuan (KI-3), Keterampilan (KI-4), Sikap Spiritual & Sosial, Ekstrakurikuler, Absensi, Catatan Wali, Kesehatan/Fisik, Prestasi, dan Kenaikan Kelas.
 - [x] **6.3 Cetak Rapor, DKN, & Buku Induk:**
   - [x] Generator cetak **Rapor PTS**, **Rapor Akhir Semester (PAS/PAT)**, dan **DKN** (sinkronisasi predikat, kehadiran, prestasi, kesehatan, dan urutan mapel).
   - [x] Modul **Buku Induk & Alumni** (pengarsipan otomatis riwayat nilai lintas semester dan kelulusan).
 - [x] **6.4 Utilitas Database & Web Installer:** Fitur Backup/Restore `.sql`, menu **Database Update (Migrasi Skema)**, dan folder `installer/` untuk instalasi awal.
 
-
-## Milestone 7: Deployment & Otomasi Produksi (Ubuntu 24.04 LTS & GitHub CI/CD)
-- [x] **7.1 Auto Installer VPS Ubuntu 24.04 LTS (`autoinstall.sh` & `deploy/install-vps.sh`):** Instalasi 1-baris Nginx, PHP 8.3-FPM, MariaDB, UFW Firewall, SSL Certbot, fitur Clean Reset/Hapus project lama masa test, dan tuning konkurensi 1.000 user ujian serentak.
+## Milestone 7: Deployment & Otomasi Produksi (Ubuntu 24.04/22.04 LTS & GitHub CI/CD)
+- [x] **7.1 Auto Installer VPS Ubuntu 24.04/22.04 LTS (`autoinstall.sh` & `deploy/install-vps.sh`):** Alur 2-langkah super mudah (git clone lalu sudo bash autoinstall.sh / sudo ./autoinstall.sh), Express 1-klik tekan ENTER, auto-detect IP & git repo lokal, perlindungan self-directory, setup Nginx, PHP 8.3-FPM, MariaDB, UFW Firewall, SSL Certbot, Clean Reset, dan tuning konkurensi 1.000 user serentak.
 - [x] **7.2 Auto Update GitHub Engine (`deploy/update.sh` & `scripts/migrate.php`):** Script penarik kode GitHub dengan auto-backup database pra-update, verifikasi skema tabel, perbaikan hak akses `www-data`, dan restart worker PHP/Nginx.
 - [x] **7.3 GitHub Webhook Listener (`public/webhook.php`):** Penerima push webhook terlindungi HMAC SHA-256 untuk pembaruan instan otomatis tanpa SSH.
 - [x] **7.4 CI/CD Pipeline & Windows Push Utility (`.github/workflows/deploy.yml` & `autopushgithub.bat`):** Otomasi testing CI/CD dan script 1-klik upload GitHub dari Windows.

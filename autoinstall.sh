@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 
 # ==============================================================================
-# DADO CBT v1.5.3 — AUTO INSTALLER UNTUK VPS UBUNTU 24.04 LTS (NOBLE NUMBAT)
+# DADO CBT v1.5.3 — AUTO INSTALLER UNTUK VPS UBUNTU 24.04 / 22.04 LTS
 # ==============================================================================
-# Skrip instalasi otomatis produksi untuk VPS Ubuntu 24.04 / 22.04 LTS.
-# Dilengkapi fitur AUTO-HAPUS SEMUA PROYEK LAMA (Clean Reset untuk Masa Test).
-# Mengonfigurasi Nginx, PHP 8.3-FPM, MariaDB Server, UFW Firewall,
-# Git Repository, migrasi 42 tabel, optimasi konkurensi 1.000 user ujian serentak,
-# dan sertifikat SSL Let's Encrypt gratis.
+# Skrip instalasi otomatis produksi untuk VPS Ubuntu.
+# Alur Pemasangan Termudah:
+#   1. git clone <URL_REPO_GITHUB> dadocbt
+#   2. cd dadocbt
+#   3. sudo bash autoinstall.sh  (atau cukup: sudo ./autoinstall.sh)
 #
-# Cara eksekusi 1-baris langsung di VPS:
-#   curl -fsSL https://raw.githubusercontent.com/<user>/<repo>/main/autoinstall.sh | sudo bash
-# Atau jalankan lokal:
-#   sudo bash autoinstall.sh
+# Dilengkapi fitur:
+#   - Express Install 1-Klik (Cukup tekan ENTER untuk semua nilai default)
+#   - Deteksi otomatis IP Server & Repository Git lokal
+#   - Pencegahan bug terhapusnya folder kerja sendiri (Self-directory safe)
+#   - Nginx Web Server, PHP 8.3-FPM dinamis (Target 1.000 Siswa Serentak)
+#   - MariaDB Server 10.11+ dengan InnoDB tuning & import 42 tabel PRD
+#   - UFW Firewall otomatis & Let's Encrypt SSL gratis
+#   - Shortcut CLI: 'sudo dadocbt-update', 'sudo dadocbt-backup', 'sudo dadocbt-status'
 # ==============================================================================
 
 set -e
@@ -27,123 +31,147 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-# Pastikan dijalankan sebagai root
+# 1. Pastikan dijalankan sebagai root / sudo
 if [ "$EUID" -ne 0 ]; then
     echo -e "${RED}[ERROR] Installer ini wajib dijalankan sebagai user root atau dengan 'sudo bash autoinstall.sh'!${NC}"
+    echo -e "Silakan coba lagi: ${BOLD}sudo bash autoinstall.sh${NC} atau ${BOLD}sudo ./autoinstall.sh${NC}"
     exit 1
 fi
 
 clear
 echo -e "${CYAN}${BOLD}"
 echo "=========================================================================="
-echo "         DADO CBT v1.5.3 — VPS AUTO INSTALLER (UBUNTU 24.04 LTS)         "
+echo "         DADO CBT v1.5.3 — VPS AUTO INSTALLER (UBUNTU 24.04/22.04)        "
 echo "        Aplikasi CBT Standar AKM, E-Learning, E-Rapor & Buku Induk        "
-echo "           Mode Uji Coba: Dilengkapi Fitur Pembersihan Total              "
+echo "              Mode Instalasi Mudah & Cepat (Zero-Friction)                "
 echo "=========================================================================="
 echo -e "${NC}"
 
-# 1. Deteksi OS
+# 2. Deteksi Direktori Sumber Proyek
+if [ -f "$(dirname "${BASH_SOURCE[0]}")/public/index.php" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+elif [ -f "$(dirname "${BASH_SOURCE[0]}")/../public/index.php" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
+
+APP_DIR="/var/www/dadocbt"
+
+# 3. Deteksi Git & IP Server
+DETECTED_REPO=""
+DETECTED_BRANCH="main"
+if [ -d "$SCRIPT_DIR/.git" ]; then
+    DETECTED_REPO=$(git -C "$SCRIPT_DIR" config --get remote.origin.url 2>/dev/null || true)
+    DETECTED_BRANCH=$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+fi
+
+SERVER_IP=$(curl -s -4 --connect-timeout 3 icanhazip.com 2>/dev/null || curl -s -4 --connect-timeout 3 ifconfig.me 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")
+
+# 4. Deteksi Sistem Operasi
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS_NAME=$ID
     OS_VERSION=$VERSION_ID
 else
-    echo -e "${RED}[ERROR] Tidak dapat mendeteksi informasi sistem operasi.${NC}"
-    exit 1
+    OS_NAME="unknown"
+    OS_VERSION="unknown"
 fi
 
-if [ "$OS_NAME" != "ubuntu" ]; then
-    echo -e "${YELLOW}[PERINGATAN] Sistem operasi terdeteksi: ${OS_NAME} ${OS_VERSION}. Disarankan menggunakan Ubuntu 24.04 LTS.${NC}"
-    read -p "Apakah Anda ingin tetap melanjutkan? (y/N): " CONTINUE_ANYWAY
-    if [[ ! "$CONTINUE_ANYWAY" =~ ^[Yy]$ ]]; then
-        exit 1
-    fi
-else
-    echo -e "${GREEN}✓ Sistem Operasi Valid: Ubuntu ${OS_VERSION} (${VERSION_CODENAME:-Noble})${NC}"
+echo -e "Informasi Sistem & Lingkungan Terdeteksi:"
+echo -e "  - Sistem Operasi   : ${GREEN}Ubuntu ${OS_VERSION:-24.04} (${VERSION_CODENAME:-Noble})${NC}"
+echo -e "  - Direktori Sumber : ${YELLOW}${SCRIPT_DIR}${NC}"
+if [ -n "$DETECTED_REPO" ]; then
+    echo -e "  - Git Repository   : ${YELLOW}${DETECTED_REPO}${NC} (Branch: ${GREEN}${DETECTED_BRANCH}${NC})"
 fi
+echo -e "  - Alamat IP Server : ${CYAN}${SERVER_IP}${NC}"
+echo -e "  - Target Produksi  : ${YELLOW}${APP_DIR}${NC}"
+echo ""
 
 # Tentukan versi PHP yang akan digunakan (Ubuntu 24.04 secara native menyediakan PHP 8.3)
 PHP_VER="8.3"
-if [ "$OS_VERSION" = "22.04" ]; then
-    PHP_VER="8.2"
-fi
 
-# 2. Parameter Input Interaktif
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 1 / 9 ] KONFIGURASI PARAMETER SISTEM${NC}"
-echo -e "Silakan isi parameter berikut atau tekan [ENTER] untuk nilai default:"
+# 5. Pilihan Mode Instalasi (Express vs Custom)
+echo -e "${BOLD}PILIH METODE INSTALASI:${NC}"
+echo -e "--------------------------------------------------------------------------"
+echo -e "  ${GREEN}${BOLD}[1] Express Install (Sangat Mudah — Cukup Tekan [ENTER])${NC}"
+echo -e "      ✓ Otomatis konfigurasi web server menggunakan IP: ${CYAN}http://${SERVER_IP}${NC}"
+echo -e "      ✓ Setup otomatis MariaDB, Nginx, PHP 8.3-FPM, UFW Firewall"
+echo -e "      ✓ Akun Admin Default: Username ${BOLD}admin${NC} | Password: ${BOLD}admin123${NC}"
+echo -e "      ✓ Bersihkan database lama & import 42 tabel relational"
+echo ""
+echo -e "  ${CYAN}[2] Custom Install (Konfigurasi Manual)${NC}"
+echo -e "      ✓ Masukkan Domain / Subdomain kustom & SSL Let's Encrypt gratis"
+echo -e "      ✓ Tentukan sendiri nama database, user, dan password admin"
+echo -e "--------------------------------------------------------------------------"
+read -p "Pilihan Anda [1/2, Default: 1]: " INPUT_MODE
+INSTALL_MODE="${INPUT_MODE:-1}"
 
-# Domain atau IP
-SERVER_IP=$(curl -s -4 icanhazip.com || hostname -I | awk '{print $1}')
-read -p "Domain / Subdomain (atau IP Server) [Default: ${SERVER_IP}]: " INPUT_DOMAIN
-DOMAIN="${INPUT_DOMAIN:-$SERVER_IP}"
+if [ "$INSTALL_MODE" = "1" ]; then
+    DOMAIN="$SERVER_IP"
+    DB_NAME="dadocbt"
+    DB_USER="dadocbt_user"
+    DB_PASS="$(tr -dc A-Za-z0-9 2>/dev/null < /dev/urandom | head -c 16 || echo "DadoCbt2026!Pass")"
+    ADMIN_USER="admin"
+    ADMIN_PASS="admin123"
+    CLEAN_OLD="Y"
+    ENABLE_SSL="no"
+    SSL_EMAIL=""
 
-# Repository Git
-read -p "URL Git Repository DADO CBT [Default: https://github.com/dado-cbt/dadocbt.git]: " INPUT_REPO
-REPO_URL="${INPUT_REPO:-https://github.com/dado-cbt/dadocbt.git}"
+    echo -e "\n${GREEN}>> Memulai Express Auto-Install DADO CBT...${NC}"
+else
+    echo -e "\n${BLUE}${BOLD}[ KONFIGURASI PARAMETER SISTEM ]${NC}"
+    read -p "Domain / Subdomain (atau IP Server) [Default: ${SERVER_IP}]: " INPUT_DOMAIN
+    DOMAIN="${INPUT_DOMAIN:-$SERVER_IP}"
 
-read -p "Branch Git [Default: main]: " INPUT_BRANCH
-GIT_BRANCH="${INPUT_BRANCH:-main}"
+    read -p "Nama Basis Data [Default: dadocbt]: " INPUT_DB_NAME
+    DB_NAME="${INPUT_DB_NAME:-dadocbt}"
 
-# Database Config
-DB_NAME_DEFAULT="dadocbt"
-read -p "Nama Basis Data [Default: ${DB_NAME_DEFAULT}]: " INPUT_DB_NAME
-DB_NAME="${INPUT_DB_NAME:-$DB_NAME_DEFAULT}"
+    read -p "Username Database [Default: dadocbt_user]: " INPUT_DB_USER
+    DB_USER="${INPUT_DB_USER:-dadocbt_user}"
 
-DB_USER_DEFAULT="dadocbt_user"
-read -p "Username Database [Default: ${DB_USER_DEFAULT}]: " INPUT_DB_USER
-DB_USER="${INPUT_DB_USER:-$DB_USER_DEFAULT}"
+    RANDOM_PASS=$(tr -dc A-Za-z0-9 2>/dev/null < /dev/urandom | head -c 16 || echo "DadoCbt2026!Secure")
+    read -p "Password Database [Default: otomatis acak]: " INPUT_DB_PASS
+    DB_PASS="${INPUT_DB_PASS:-$RANDOM_PASS}"
 
-RANDOM_PASS=$(tr -dc A-Za-z0-9_#% 2>/dev/null < /dev/urandom | head -c 16 || echo "DadoCbt2026!Secure")
-read -p "Password Database [Default: otomatis acak]: " INPUT_DB_PASS
-DB_PASS="${INPUT_DB_PASS:-$RANDOM_PASS}"
+    read -p "Username Administrator [Default: admin]: " INPUT_ADMIN_USER
+    ADMIN_USER="${INPUT_ADMIN_USER:-admin}"
 
-# Admin Credentials
-read -p "Username Administrator [Default: admin]: " INPUT_ADMIN_USER
-ADMIN_USER="${INPUT_ADMIN_USER:-admin}"
+    read -p "Password Administrator [Default: admin123]: " INPUT_ADMIN_PASS
+    ADMIN_PASS="${INPUT_ADMIN_PASS:-admin123}"
 
-read -p "Password Administrator [Default: admin123]: " INPUT_ADMIN_PASS
-ADMIN_PASS="${INPUT_ADMIN_PASS:-admin123}"
+    read -p "Hapus semua project & database lama di VPS (Clean Reset)? [Y/n]: " INPUT_CLEAN
+    CLEAN_OLD="${INPUT_CLEAN:-Y}"
 
-# Pembersihan Masa Test
-read -p "Hapus semua project & database lama di VPS (Clean Reset - Masa Test)? [Y/n]: " INPUT_CLEAN
-CLEAN_OLD="${INPUT_CLEAN:-Y}"
-
-# SSL Let's Encrypt
-ENABLE_SSL="no"
-SSL_EMAIL=""
-if [[ "$DOMAIN" =~ \.[a-zA-Z]{2,}$ ]]; then
-    read -p "Apakah Anda ingin memasang SSL HTTPS gratis via Let's Encrypt? (y/N): " INPUT_SSL
-    if [[ "$INPUT_SSL" =~ ^[Yy]$ ]]; then
-        ENABLE_SSL="yes"
-        read -p "Alamat Email Administrator untuk SSL: " SSL_EMAIL
+    ENABLE_SSL="no"
+    SSL_EMAIL=""
+    if [[ "$DOMAIN" =~ \.[a-zA-Z]{2,}$ ]]; then
+        read -p "Pasang sertifikat SSL Let's Encrypt gratis? (y/N): " INPUT_SSL
+        if [[ "$INPUT_SSL" =~ ^[Yy]$ ]]; then
+            ENABLE_SSL="yes"
+            read -p "Email Administrator untuk SSL Let's Encrypt: " SSL_EMAIL
+        fi
     fi
 fi
 
-APP_DIR="/var/www/dadocbt"
-
-echo -e "\n${CYAN}Ringkasan Konfigurasi:${NC}"
+echo -e "\n${CYAN}Ringkasan Konfigurasi Pemasangan:${NC}"
 echo -e "  - Alamat Akses     : ${YELLOW}http://${DOMAIN}${NC}"
 echo -e "  - Direktori Web    : ${YELLOW}${APP_DIR}${NC}"
 echo -e "  - Versi PHP        : ${YELLOW}PHP ${PHP_VER}-FPM${NC}"
 echo -e "  - Database         : ${YELLOW}${DB_NAME} (User: ${DB_USER})${NC}"
 echo -e "  - Admin Default    : ${YELLOW}${ADMIN_USER}${NC}"
-echo -e "  - Reset Masa Test  : ${YELLOW}${CLEAN_OLD} (Hapus seluruh proyek & DB lama)${NC}"
+echo -e "  - Clean Reset      : ${YELLOW}${CLEAN_OLD}${NC}"
 echo -e "  - Pasang SSL       : ${YELLOW}${ENABLE_SSL}${NC}"
 echo ""
-read -p "Lanjutkan proses instalasi otomatis? (Y/n): " CONFIRM
-if [[ "$CONFIRM" =~ ^[Nn]$ ]]; then
-    echo -e "${RED}Instalasi dibatalkan oleh pengguna.${NC}"
-    exit 0
-fi
 
-# 3. Update Sistem & Install Paket Dasar
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 2 / 9 ] MEMPERBARUI SISTEM & MENGINSTAL DEPENDENSI${NC}"
+# 6. Update Sistem & Install Paket Dasar
+echo -e "\n${BLUE}${BOLD}[ LANGKAH 1 / 8 ] MEMPERBARUI SISTEM & MENGINSTAL DEPENDENSI${NC}"
 export DEBIAN_FRONTEND=noninteractive
 apt update -y
 apt upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
-# Install alat pendukung
-apt install -y software-properties-common curl wget git unzip zip ufw htop jq ca-certificates lsb-release
+# Install paket-paket pendukung esensial
+apt install -y software-properties-common curl wget git unzip zip ufw htop jq ca-certificates lsb-release rsync
 
 # Tambahkan repository Ondrej PHP jika di Ubuntu 22.04 membutuhkan PHP 8.3
 if [ "$PHP_VER" = "8.3" ] && [ "$OS_VERSION" != "24.04" ]; then
@@ -151,8 +179,8 @@ if [ "$PHP_VER" = "8.3" ] && [ "$OS_VERSION" != "24.04" ]; then
     apt update -y
 fi
 
-# 4. Install Nginx, PHP, MariaDB, Certbot
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 3 / 9 ] MENGINSTAL NGINX, PHP ${PHP_VER}, & MARIADB${NC}"
+# 7. Install Nginx, PHP, MariaDB, Certbot
+echo -e "\n${BLUE}${BOLD}[ LANGKAH 2 / 8 ] MENGINSTAL NGINX, PHP ${PHP_VER}, & MARIADB${NC}"
 apt install -y nginx mariadb-server mariadb-client
 
 apt install -y \
@@ -176,28 +204,38 @@ systemctl enable nginx
 systemctl enable mariadb
 systemctl enable "php${PHP_VER}-fpm"
 
-echo -e "${GREEN}✓ Layanan Nginx, PHP ${PHP_VER}, dan MariaDB berhasil dipasang.${NC}"
+echo -e "${GREEN}✓ Layanan Nginx, PHP ${PHP_VER}, dan MariaDB siap digunakan.${NC}"
 
-# 5. PEMBERSIHAN TOTAL PROYEK & DATABASE LAMA (CLEAN RESET UNTUK MASA TEST)
+# 8. Pembersihan Proyek & Basis Data Lama (Clean Reset yang Aman)
 if [[ "$CLEAN_OLD" =~ ^[Yy]$ ]]; then
-    echo -e "\n${YELLOW}${BOLD}[ LANGKAH 4 / 9 ] MEMBERSIHKAN SELURUH PROYEK & BASIS DATA LAMA (MASA TEST)${NC}"
-    echo -e "${YELLOW}Menghentikan worker sementara dan menghapus file/database pengujian sebelumnya...${NC}"
+    echo -e "\n${YELLOW}${BOLD}[ LANGKAH 3 / 8 ] MEMBERSIHKAN DATABASE & INSTALASI LAMA (CLEAN RESET)${NC}"
 
-    # Hentikan web server sementara agar tidak mengunci file atau socket
     systemctl stop nginx 2>/dev/null || true
     for ver in 8.4 8.3 8.2 8.1; do
         systemctl stop "php${ver}-fpm" 2>/dev/null || true
     done
 
-    # Hapus folder aplikasi lama di /var/www/
-    for old_dir in "$APP_DIR" "/var/www/cbt" "/var/www/garudacbt" "/var/www/cbt-saduci"; do
-        if [ -d "$old_dir" ]; then
-            echo -e "  - Menghapus direktori lama: ${old_dir}..."
-            rm -rf "$old_dir"
+    # Bersihkan direktori legacy lain jika ada
+    for legacy_dir in "/var/www/cbt" "/var/www/garudacbt" "/var/www/cbt-saduci"; do
+        if [ -d "$legacy_dir" ]; then
+            echo -e "  - Menghapus direktori legacy: ${legacy_dir}..."
+            rm -rf "$legacy_dir"
         fi
     done
 
-    # Hapus konfigurasi web server lama
+    # PENTING: Jika skrip ini dijalankan dari dalam APP_DIR (/var/www/dadocbt),
+    # JANGAN hapus foldernya karena itu akan merusak repositori lokal yang sedang dieksekusi!
+    if [ "$SCRIPT_DIR" != "$APP_DIR" ]; then
+        if [ -d "$APP_DIR" ]; then
+            echo -e "  - Membersihkan direktori target lama: ${APP_DIR}..."
+            rm -rf "$APP_DIR"
+        fi
+    else
+        echo -e "  - Menjalankan dari repositori lokal di ${APP_DIR}. Mengosongkan folder logs & temporary..."
+        rm -rf "$APP_DIR/storage/backups/"* "$APP_DIR/storage/logs/"* 2>/dev/null || true
+    fi
+
+    # Bersihkan konfigurasi web server lama
     rm -f /etc/nginx/sites-available/dadocbt /etc/nginx/sites-enabled/dadocbt
     rm -f /etc/nginx/sites-available/cbt /etc/nginx/sites-enabled/cbt
     rm -f /etc/php/*/fpm/pool.d/dadocbt.conf
@@ -213,16 +251,15 @@ if [[ "$CLEAN_OLD" =~ ^[Yy]$ ]]; then
         mariadb -e "FLUSH PRIVILEGES;" 2>/dev/null || true
     fi
 
-    echo -e "${GREEN}✓ Seluruh file proyek lama & basis data uji coba berhasil dibersihkan total!${NC}"
+    echo -e "${GREEN}✓ Basis data dan file konfigurasi pengujian lama berhasil dibersihkan!${NC}"
 else
-    echo -e "\n${BLUE}[ LANGKAH 4 / 9 ] Pembersihan proyek lama dilewati sesuai pilihan pengguna.${NC}"
+    echo -e "\n${BLUE}[ LANGKAH 3 / 8 ] Pembersihan proyek lama dilewati sesuai pilihan pengguna.${NC}"
 fi
 
-# 6. Optimasi MariaDB untuk 1.000 Siswa Ujian Serentak
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 5 / 9 ] MENGONFIGURASI & MENGOPTIMASI MARIADB${NC}"
+# 9. Optimasi MariaDB untuk 1.000 Siswa Ujian Serentak
+echo -e "\n${BLUE}${BOLD}[ LANGKAH 4 / 8 ] MENGONFIGURASI & MENGOPTIMASI BASIS DATA MARIADB${NC}"
 
-# Hitung RAM server untuk menentukan buffer pool
-TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo | awk '{print $2}')
+TOTAL_RAM_KB=$(grep MemTotal /proc/meminfo 2>/dev/null | awk '{print $2}' || echo "2000000")
 TOTAL_RAM_MB=$((TOTAL_RAM_KB / 1024))
 
 if [ "$TOTAL_RAM_MB" -ge 7000 ]; then
@@ -281,33 +318,26 @@ mariadb -e "FLUSH PRIVILEGES;"
 
 echo -e "${GREEN}✓ Basis data '${DB_NAME}' & user '${DB_USER}' berhasil diinisialisasi bersih.${NC}"
 
-# 7. Unduh / Deploy Kode Sumber DADO CBT Bersih
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 6 / 9 ] MEMASANG KODE SUMBER DADO CBT${NC}"
+# 10. Memasang Kode Sumber DADO CBT ke Target Produksi
+echo -e "\n${BLUE}${BOLD}[ LANGKAH 5 / 8 ] MEMASANG KODE SUMBER DADO CBT KE ${APP_DIR}${NC}"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/public/index.php" ] && [ "$SCRIPT_DIR" != "$APP_DIR" ]; then
-    echo -e "${BLUE}Menyalin file dari repositori lokal (${SCRIPT_DIR}) ke ${APP_DIR}...${NC}"
+if [ "$SCRIPT_DIR" != "$APP_DIR" ]; then
+    echo -e "${BLUE}Menyalin berkas dari repositori lokal (${SCRIPT_DIR}) ke ${APP_DIR}...${NC}"
     mkdir -p "$APP_DIR"
-    cp -r "$SCRIPT_DIR/." "$APP_DIR/"
-elif [ -d "$APP_DIR/.git" ]; then
-    echo -e "${BLUE}Memperbarui repositori git di ${APP_DIR}...${NC}"
-    cd "$APP_DIR"
-    git fetch origin "$GIT_BRANCH"
-    git checkout "$GIT_BRANCH"
-    git pull origin "$GIT_BRANCH"
+    cp -a "$SCRIPT_DIR/." "$APP_DIR/"
 else
-    echo -e "${BLUE}Melakukan git clone segar dari ${REPO_URL} (Branch: ${GIT_BRANCH})...${NC}"
-    rm -rf "$APP_DIR"
-    git clone -b "$GIT_BRANCH" "$REPO_URL" "$APP_DIR" || {
-        echo -e "${YELLOW}Gagal clone dari remote git. Membuat direktori baru...${NC}"
-        mkdir -p "$APP_DIR"
-        if [ -f "$SCRIPT_DIR/public/index.php" ]; then
-            cp -r "$SCRIPT_DIR/." "$APP_DIR/"
-        fi
-    }
+    echo -e "${GREEN}✓ Repositori sudah berada di direktori target: ${APP_DIR}${NC}"
 fi
 
 cd "$APP_DIR"
+
+# Tambahkan direktori git safe agar tidak terhambat permission
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+if id "www-data" >/dev/null 2>&1; then
+    sudo -u www-data git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+fi
+
+# Buat struktur direktori upload & storage
 mkdir -p "$APP_DIR/storage/backups"
 mkdir -p "$APP_DIR/storage/logs"
 mkdir -p "$APP_DIR/public/uploads/sekolah"
@@ -317,7 +347,8 @@ mkdir -p "$APP_DIR/public/uploads/materi"
 mkdir -p "$APP_DIR/public/uploads/tugas"
 mkdir -p "$APP_DIR/public/uploads/soal"
 
-# Generate File .env
+# Generate Konfigurasi .env
+WEBHOOK_SECRET=$(tr -dc A-Za-z0-9 2>/dev/null < /dev/urandom | head -c 32 || echo "DadoCbtSecretWebhookKey2026")
 cat > "$APP_DIR/.env" <<EOF
 APP_NAME="DADO CBT"
 APP_ENV=production
@@ -333,22 +364,28 @@ DB_PASS="${DB_PASS}"
 SESSION_COOKIE_NAME=dadocbt_session
 SESSION_LIFETIME=7200
 TIMEZONE=Asia/Jakarta
-GITHUB_WEBHOOK_SECRET="$(tr -dc A-Za-z0-9 2>/dev/null < /dev/urandom | head -c 32 || echo "DadoCbtSecretWebhookKey2026")"
+GITHUB_WEBHOOK_SECRET="${WEBHOOK_SECRET}"
 EOF
 
-# Import Skema Database 42 Tabel & Seeder Awal
+# Import Skema 42 Tabel & Data Seeder
 echo -e "${BLUE}Mengimpor skema 42 tabel database dan seed data awal...${NC}"
 if [ -f "$APP_DIR/database/schema.sql" ]; then
     mariadb -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" < "$APP_DIR/database/schema.sql"
-    echo -e "${GREEN}      ✓ Schema 42 tabel berhasil diimpor.${NC}"
+    echo -e "${GREEN}      ✓ Schema 42 tabel database berhasil diimpor.${NC}"
 fi
 
 if [ -f "$APP_DIR/database/seed.sql" ]; then
     mariadb -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" < "$APP_DIR/database/seed.sql" 2>/dev/null || true
-    echo -e "${GREEN}      ✓ Data awal (seeder) berhasil diimpor.${NC}"
+    echo -e "${GREEN}      ✓ Data awal master (seeder) berhasil diimpor.${NC}"
 fi
 
-# Setel Akun Admin & Profil Sekolah
+# Jalankan Runner Migrasi PHP untuk Validasi Skema 42 Tabel
+if [ -f "$APP_DIR/scripts/migrate.php" ]; then
+    echo -e "${BLUE}Menjalankan verifikasi migrasi skema tabel DADO CBT...${NC}"
+    php "$APP_DIR/scripts/migrate.php" || true
+fi
+
+# Set Akun Admin Default & Data Profil Sekolah
 HASHED_ADMIN_PASS=$(php -r "echo password_hash('${ADMIN_PASS}', PASSWORD_BCRYPT);")
 mariadb -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" -e "
     UPDATE users SET username = '${ADMIN_USER}', password = '${HASHED_ADMIN_PASS}', active = 1 WHERE role = 'admin' LIMIT 1;
@@ -358,11 +395,11 @@ mariadb -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" -e "
     UPDATE setting_sekolah SET nama_sekolah = 'SMP NEGERI SATU ATAP 2 CIPATUJAH', jenjang = 2 WHERE id_setting = 1;
 " 2>/dev/null || true
 
-# Buat file pengunci instalasi
+# Buat berkas pengunci instalasi
 echo "Installed via VPS Autoinstaller on $(date '+%Y-%m-%d %H:%M:%S')" > "$APP_DIR/installed.lock"
 
-# 8. Optimasi PHP-FPM Pool & OPcache
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 7 / 9 ] MENGONFIGURASI POOL PHP ${PHP_VER}-FPM & OPCACHE${NC}"
+# 11. Optimasi Pool PHP-FPM & OPcache
+echo -e "\n${BLUE}${BOLD}[ LANGKAH 6 / 8 ] MENGONFIGURASI POOL PHP ${PHP_VER}-FPM & OPCACHE${NC}"
 
 cat > "/etc/php/${PHP_VER}/fpm/pool.d/dadocbt.conf" <<EOF
 [dadocbt]
@@ -396,7 +433,6 @@ php_admin_value[error_log] = /var/log/php${PHP_VER}-fpm-dadocbt.log
 php_admin_flag[log_errors] = on
 EOF
 
-# Konfigurasi OPcache
 cat > "/etc/php/${PHP_VER}/mods-available/opcache.ini" <<EOF
 zend_extension=opcache.so
 opcache.enable=1
@@ -414,8 +450,8 @@ EOF
 systemctl restart "php${PHP_VER}-fpm"
 echo -e "${GREEN}✓ Pool PHP-FPM 'dadocbt' & OPcache berhasil diaktifkan.${NC}"
 
-# 9. Konfigurasi Virtual Host Nginx
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 8 / 9 ] MENGONFIGURASI VIRTUAL HOST NGINX${NC}"
+# 12. Konfigurasi Virtual Host Nginx
+echo -e "\n${BLUE}${BOLD}[ LANGKAH 7 / 8 ] MENGONFIGURASI VIRTUAL HOST NGINX${NC}"
 
 cat > /etc/nginx/sites-available/dadocbt <<EOF
 server {
@@ -429,7 +465,7 @@ server {
     client_max_body_size 128M;
     client_body_buffer_size 128k;
 
-    # Gzip Compression untuk menghemat bandwidth CBT
+    # Gzip Compression untuk menghemat bandwidth ujian CBT
     gzip on;
     gzip_vary on;
     gzip_proxied any;
@@ -441,7 +477,7 @@ server {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
 
-    # Penanganan Skrip PHP via FastCGI Pool
+    # Penanganan Skrip PHP via FastCGI Pool Dinamis
     location ~ \.php\$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/run/php/php${PHP_VER}-fpm-dadocbt.sock;
@@ -458,7 +494,7 @@ server {
         fastcgi_send_timeout 300s;
     }
 
-    # Cache Aset Statis (CSS, JS, WebFont KaTeX, Gambar)
+    # Cache Aset Statis (CSS, JS, WebFont KaTeX, Arabic Calibri, Gambar)
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|woff|woff2|ttf|svg|eot)\$ {
         expires 30d;
         add_header Cache-Control "public, no-transform";
@@ -466,7 +502,7 @@ server {
         log_not_found off;
     }
 
-    # Lindungi file rahasia (.env, .git, installed.lock, storage)
+    # Proteksi Berkas Sensitif
     location ~ /\.(?!well-known).* {
         deny all;
         access_log off;
@@ -495,8 +531,8 @@ nginx -t
 systemctl restart nginx
 echo -e "${GREEN}✓ Konfigurasi Nginx berhasil diuji dan diterapkan.${NC}"
 
-# 10. Atur Hak Akses Direktori
-echo -e "\n${BLUE}${BOLD}[ LANGKAH 9 / 9 ] FINALISASI PERIZINAN & SHORTCUT PERINTAH${NC}"
+# 13. Izin Direktori, Shortcut CLI, Firewall & SSL
+echo -e "\n${BLUE}${BOLD}[ LANGKAH 8 / 8 ] FINALISASI PERIZINAN & SHORTCUT PERINTAH${NC}"
 
 chown -R www-data:www-data "$APP_DIR"
 find "$APP_DIR" -type d -exec chmod 755 {} +
@@ -517,7 +553,7 @@ www-data ALL=(ALL) NOPASSWD: ${APP_DIR}/deploy/update.sh, ${APP_DIR}/deploy/back
 EOF
 chmod 0440 /etc/sudoers.d/dadocbt
 
-# Konfigurasi UFW Firewall
+# Konfigurasi Firewall UFW
 if command -v ufw >/dev/null 2>&1; then
     ufw allow OpenSSH >/dev/null 2>&1 || true
     ufw allow 'Nginx Full' >/dev/null 2>&1 || true
@@ -529,19 +565,19 @@ fi
 if [ "$ENABLE_SSL" = "yes" ] && [ -n "$SSL_EMAIL" ]; then
     echo -e "\n${BLUE}Memasang sertifikat SSL Let's Encrypt untuk ${DOMAIN}...${NC}"
     certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos -m "$SSL_EMAIL" --redirect || {
-        echo -e "${YELLOW}Certbot gagal mendapatkan sertifikat SSL. Pastikan DNS domain telah mengarah ke IP ini (${SERVER_IP}).${NC}"
+        echo -e "${YELLOW}Certbot belum dapat mengaktifkan SSL. Pastikan DNS domain telah mengarah ke IP ${SERVER_IP}.${NC}"
     }
 fi
 
-# Ringkasan Selesai
+# 14. Ringkasan Pemasangan Selesai
 clear
 echo -e "${GREEN}${BOLD}"
 echo "=========================================================================="
 echo "          ✔ INSTALASI DADO CBT v1.5.3 BERHASIL DI-DEPLOY!                 "
-echo "        (Server Dibersihkan & Dikonfigurasi Segar / Fresh Clean)          "
+echo "        (Server Siap Melayani Hingga 1.000 Peserta Ujian Serentak)        "
 echo "=========================================================================="
 echo -e "${NC}"
-echo -e "Informasi Akses Aplikasi:"
+echo -e "Informasi Akses Aplikasi Web:"
 if [ "$ENABLE_SSL" = "yes" ]; then
     echo -e "  🌐 Portal Utama    : ${CYAN}https://${DOMAIN}/login${NC}"
     echo -e "  📝 Ruang CBT Siswa : ${CYAN}https://${DOMAIN}/cbt/login${NC}"
@@ -567,3 +603,4 @@ echo ""
 echo -e "${CYAN}==========================================================================${NC}"
 echo -e "Catatan: File konfigurasi tersimpan di: ${YELLOW}${APP_DIR}/.env${NC}"
 echo -e "${CYAN}==========================================================================${NC}"
+exit 0
