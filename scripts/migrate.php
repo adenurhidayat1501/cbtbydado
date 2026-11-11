@@ -54,7 +54,7 @@ echo "========================================================\n";
 echo "   DADO CBT v1.5.3 — DATABASE MIGRATION ENGINE\n";
 echo "========================================================\n";
 echo "Waktu       : " . date('Y-m-d H:i:s') . "\n";
-echo "Database    : " . ($_ENV['DB_NAME'] ?? 'garudacbt') . "\n";
+echo "Database    : " . ($_ENV['DB_DATABASE'] ?? $_ENV['DB_NAME'] ?? 'dadocbt') . "\n";
 echo "Host        : " . ($_ENV['DB_HOST'] ?? '127.0.0.1') . ":" . ($_ENV['DB_PORT'] ?? '3306') . "\n";
 echo "--------------------------------------------------------\n";
 
@@ -95,4 +95,3 @@ try {
     echo "========================================================\n";
     exit(1);
 }
-

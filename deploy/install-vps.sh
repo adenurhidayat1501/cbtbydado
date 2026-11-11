@@ -259,6 +259,9 @@ apt install -y \
     "php${PHP_VER}-opcache" \
     "php${PHP_VER}-intl"
 
+# Aktifkan modul PDO MySQL eksplisit di CLI & FPM
+phpenmod -v "${PHP_VER}" pdo_mysql mysqlnd mysqli 2>/dev/null || phpenmod pdo_mysql 2>/dev/null || true
+
 if [ "$ENABLE_SSL" = "yes" ]; then
     apt install -y certbot python3-certbot-nginx
 fi
@@ -397,7 +400,7 @@ mkdir -p "$APP_DIR/public/uploads/materi"
 mkdir -p "$APP_DIR/public/uploads/tugas"
 mkdir -p "$APP_DIR/public/uploads/soal"
 
-# Generate Konfigurasi .env
+# Generate Konfigurasi .env (Mencakup kedua format DB_DATABASE dan DB_NAME)
 WEBHOOK_SECRET=$(tr -dc A-Za-z0-9 2>/dev/null < /dev/urandom | head -c 32 || echo "DadoCbtSecretWebhookKey2026")
 cat > "$APP_DIR/.env" <<EOF
 APP_NAME="DADO CBT"
@@ -405,11 +408,17 @@ APP_ENV=production
 APP_DEBUG=false
 APP_URL=http://${DOMAIN}
 
+DB_CONNECTION=mysql
 DB_HOST=127.0.0.1
 DB_PORT=3306
+DB_DATABASE=${DB_NAME}
 DB_NAME=${DB_NAME}
+DB_USERNAME=${DB_USER}
 DB_USER=${DB_USER}
+DB_PASSWORD="${DB_PASS}"
 DB_PASS="${DB_PASS}"
+DB_CHARSET=utf8mb4
+DB_COLLATION=utf8mb4_unicode_ci
 
 SESSION_COOKIE_NAME=dadocbt_session
 SESSION_LIFETIME=7200
@@ -448,7 +457,7 @@ mariadb -u "${DB_USER}" -p"${DB_PASS}" "${DB_NAME}" -e "
 # Buat berkas pengunci instalasi
 echo "Installed via VPS Autoinstaller on $(date '+%Y-%m-%d %H:%M:%S')" > "$APP_DIR/installed.lock"
 
-# 12. Optimasi Pool PHP-FPM & OPcache (Aman dan Terisolasi)
+# 12. Optimasi Pool PHP-FPM & OPcache (Aman, Bersih dari Karakter Rusak)
 echo -e "\n${BLUE}${BOLD}[ LANGKAH 6 / 8 ] MENGONFIGURASI POOL PHP ${PHP_VER}-FPM & OPCACHE${NC}"
 
 # Siapkan direktori runtime socket & log PHP-FPM dengan izin yang benar
@@ -465,6 +474,7 @@ if [ -f "/etc/php/${PHP_VER}/fpm/pool.d/www.conf" ]; then
     mv "/etc/php/${PHP_VER}/fpm/pool.d/www.conf" "/etc/php/${PHP_VER}/fpm/pool.d/www.conf.disabled" 2>/dev/null || true
 fi
 
+# Konfigurasi Pool PHP-FPM Khusus DADO CBT (Hanya gunakan tanda titik koma ';' untuk komentar INI)
 cat > "/etc/php/${PHP_VER}/fpm/pool.d/dadocbt.conf" <<EOF
 [dadocbt]
 user = www-data
@@ -475,7 +485,7 @@ listen.owner = www-data
 listen.group = www-data
 listen.mode = 0660
 
-# Model Pool Dinamis Adaptif RAM (${RAM_TIER})
+; Model Pool Dinamis Adaptif RAM
 pm = dynamic
 pm.max_children = ${PHP_MAX_CHILDREN}
 pm.start_servers = ${PHP_START_SERVERS}
@@ -483,7 +493,7 @@ pm.min_spare_servers = ${PHP_MIN_SPARE}
 pm.max_spare_servers = ${PHP_MAX_SPARE}
 pm.max_requests = 1000
 
-# Konfigurasi Eksekusi & Upload Berkas
+; Konfigurasi Eksekusi dan Upload Berkas
 php_admin_value[upload_max_filesize] = 128M
 php_admin_value[post_max_size]        = 128M
 php_admin_value[memory_limit]         = ${PHP_MEMORY_LIMIT}
@@ -491,7 +501,7 @@ php_admin_value[max_execution_time]   = 300
 php_admin_value[max_input_time]       = 300
 php_admin_value[date.timezone]        = Asia/Jakarta
 
-# Logging
+; Logging
 catch_workers_output = yes
 php_admin_value[error_log] = /var/log/php${PHP_VER}-fpm-dadocbt.log
 php_admin_flag[log_errors] = on
@@ -515,9 +525,7 @@ EOF
 
 # Uji sintaks PHP-FPM sebelum restart
 echo -e "${BLUE}Menguji validasi konfigurasi PHP ${PHP_VER}-FPM...${NC}"
-"php-fpm${PHP_VER}" -t || {
-    echo -e "${YELLOW}Peringatan sintaks pool terdeteksi, memulihkan default fallback...${NC}"
-}
+"php-fpm${PHP_VER}" -t
 
 systemctl restart "php${PHP_VER}-fpm"
 echo -e "${GREEN}✓ Pool PHP-FPM 'dadocbt' & OPcache berhasil diaktifkan.${NC}"
